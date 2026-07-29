@@ -5,7 +5,7 @@ import "sync/atomic"
 // next advances and returns the state.
 func (p *PT) next() uint64 {
 again:
-	index := tid() & 7
+	index := GetTid() & 7
 	orig := atomic.LoadUint64(&p.state[index].v)
 	next := orig*mul + parInc[index]
 	if atomic.CompareAndSwapUint64(&p.state[index].v, orig, next) {

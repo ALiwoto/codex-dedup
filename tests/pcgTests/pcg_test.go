@@ -1,4 +1,4 @@
-package pcg
+package pcgTests
 
 import (
 	"slices"

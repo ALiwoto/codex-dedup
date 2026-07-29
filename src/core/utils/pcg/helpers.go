@@ -112,7 +112,7 @@ func NewParallel(state uint64) PT {
 // New constructs a pcg with the given state.
 func New(state uint64) T { return T{state} }
 
-func tid() (v uint64) {
+func GetTid() (v uint64) {
 	x := tidPool.Get()
 	tidPool.Put(x)
 	v, _ = x.(uint64)
