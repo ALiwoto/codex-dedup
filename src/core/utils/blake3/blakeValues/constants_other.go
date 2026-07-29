@@ -3,4 +3,4 @@
 
 package blakeValues
 
-const OptimizeLittleEndian = true
+const OptimizeLittleEndian = false
