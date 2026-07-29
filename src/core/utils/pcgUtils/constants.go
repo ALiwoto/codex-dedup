@@ -1,4 +1,4 @@
-package pcg
+package pcgUtils
 
 // mul is the multiplier for the LCG step.
 const (

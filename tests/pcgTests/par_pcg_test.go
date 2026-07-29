@@ -3,7 +3,7 @@ package pcgTests
 import (
 	"testing"
 
-	"github.com/ALiwoto/codex-dedup/src/core/utils/pcg"
+	pcg "github.com/ALiwoto/codex-dedup/src/core/utils/pcgUtils"
 )
 
 func BenchmarkParPCG(b *testing.B) {

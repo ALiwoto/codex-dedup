@@ -4,12 +4,12 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ALiwoto/codex-dedup/src/core/utils/pcg"
+	"github.com/ALiwoto/codex-dedup/src/core/utils/pcgUtils"
 )
 
 func TestPCG(t *testing.T) {
 	t.Run("Matches", func(t *testing.T) {
-		rng := pcg.New(2345)
+		rng := pcgUtils.New(2345)
 		out := make([]uint32, 10)
 		for i := range out {
 			out[i] = rng.Uint32()
@@ -42,7 +42,7 @@ var (
 
 func BenchmarkPCG(b *testing.B) {
 	b.Run("Uint32", func(b *testing.B) {
-		rng := pcg.New(2345)
+		rng := pcgUtils.New(2345)
 		for i := 0; i < b.N; i++ {
 			blackholeUint32 += rng.Uint32()
 		}
@@ -50,14 +50,14 @@ func BenchmarkPCG(b *testing.B) {
 
 	b.Run("Uint32n", func(b *testing.B) {
 		b.Run("Large", func(b *testing.B) {
-			rng := pcg.New(2345)
+			rng := pcgUtils.New(2345)
 			for i := 0; i < b.N; i++ {
 				blackholeUint32 += rng.Uint32n(1<<31 + 1)
 			}
 		})
 
 		b.Run("Small", func(b *testing.B) {
-			rng := pcg.New(2345)
+			rng := pcgUtils.New(2345)
 			for i := 0; i < b.N; i++ {
 				blackholeUint32 += rng.Uint32n(1000)
 			}
@@ -65,21 +65,21 @@ func BenchmarkPCG(b *testing.B) {
 	})
 
 	b.Run("Uint64", func(b *testing.B) {
-		rng := pcg.New(2345)
+		rng := pcgUtils.New(2345)
 		for i := 0; i < b.N; i++ {
 			blackholeUint64 += rng.Uint64()
 		}
 	})
 
 	b.Run("Float64", func(b *testing.B) {
-		rng := pcg.New(2345)
+		rng := pcgUtils.New(2345)
 		for i := 0; i < b.N; i++ {
 			blackholeFloat64 += rng.Float64()
 		}
 	})
 
 	b.Run("Float32", func(b *testing.B) {
-		rng := pcg.New(2345)
+		rng := pcgUtils.New(2345)
 		for i := 0; i < b.N; i++ {
 			blackholeFloat32 += rng.Float32()
 		}

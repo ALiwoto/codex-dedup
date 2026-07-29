@@ -1,4 +1,4 @@
-package pcg
+package pcgUtils
 
 import "sync/atomic"
 

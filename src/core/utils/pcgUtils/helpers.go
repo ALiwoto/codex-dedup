@@ -1,4 +1,4 @@
-package pcg
+package pcgUtils
 
 // Uint32 returns a random uint32.
 // Safe for concurrent callers.

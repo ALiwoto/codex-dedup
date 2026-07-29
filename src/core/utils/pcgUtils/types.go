@@ -1,4 +1,4 @@
-package pcg
+package pcgUtils
 
 // PT is a thread safe pcg generator. The output is non-deterministic, even
 // if all of the calls are single threaded. The zero value is valid.
