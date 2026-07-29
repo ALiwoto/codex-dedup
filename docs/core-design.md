@@ -28,13 +28,15 @@ codex-cli <-> local proxy <-> remote proxy <-> provider
    versions, endpoint names, or schemas.
 6. The current transport scope is ordinary HTTP with streamed SSE responses.
    WebSocket upgrades may be added separately later.
+7. Request bodies use deterministic `fastcdc-v1` content-defined chunking with
+   initial minimum/target/maximum sizes of 16/64/256 KiB. Chunk identities and
+   the complete-body identity use BLAKE3-256.
 
 ## Not decided yet
 
 - Local-to-remote authentication and encryption.
 - Provider-destination validation and SSRF protections.
 - Tunnel framing and request lifecycle.
-- Chunking algorithm, digest, and chunk sizes.
 - Cache storage and eviction behavior.
 - Request spooling and resource limits.
 

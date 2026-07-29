@@ -2,6 +2,7 @@ package localProxyTests
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"net"
@@ -53,7 +54,7 @@ func TestLocalProxyForwardsOpaqueHTTPRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse provider URL: %v", err)
 	}
-	localURL := startLocalProxy(t, providerURL)
+	localURL, proxyServer := startLocalProxy(t, providerURL)
 	requestBody := strings.Repeat("x", 5*1024*1024)
 
 	request, err := http.NewRequest(
@@ -108,6 +109,17 @@ func TestLocalProxyForwardsOpaqueHTTPRequest(t *testing.T) {
 	if forwarded.Body != requestBody {
 		t.Fatalf("provider received a different request body")
 	}
+
+	snapshot := proxyServer.DedupMeasurementSnapshot()
+	if snapshot.MeasuredRequestCount != 1 {
+		t.Fatalf("unexpected measured request count: %d", snapshot.MeasuredRequestCount)
+	}
+	if snapshot.BodyBytes != uint64(len(requestBody)) {
+		t.Fatalf("unexpected measured body bytes: %d", snapshot.BodyBytes)
+	}
+	if snapshot.NewChunkBytes+snapshot.ReusableChunkBytes != snapshot.BodyBytes {
+		t.Fatal("measured chunks do not account for the complete request body")
+	}
 }
 
 func TestLocalProxyStreamsServerSentEvents(t *testing.T) {
@@ -135,7 +147,7 @@ func TestLocalProxyStreamsServerSentEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse provider URL: %v", err)
 	}
-	localURL := startLocalProxy(t, providerURL)
+	localURL, _ := startLocalProxy(t, providerURL)
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	response, err := client.Get(localURL + "/arbitrary/events")
@@ -167,7 +179,85 @@ func TestLocalProxyStreamsServerSentEvents(t *testing.T) {
 	}
 }
 
-func startLocalProxy(t *testing.T, providerURL *url.URL) string {
+func TestDedupMeasurementReusesAnIdenticalBody(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer provider.Close()
+
+	providerURL, err := url.Parse(provider.URL)
+	if err != nil {
+		t.Fatalf("parse provider URL: %v", err)
+	}
+	localURL, proxyServer := startLocalProxy(t, providerURL)
+	body := deterministicRequestBody(2 * 1024 * 1024)
+
+	sendRequestBody(t, localURL, body)
+	first := proxyServer.DedupMeasurementSnapshot()
+	sendRequestBody(t, localURL, body)
+	second := proxyServer.DedupMeasurementSnapshot()
+
+	if second.MeasuredRequestCount != 2 {
+		t.Fatalf("unexpected measured request count: %d", second.MeasuredRequestCount)
+	}
+	if second.NewChunkBytes != first.NewChunkBytes {
+		t.Fatalf("identical request added %d new bytes", second.NewChunkBytes-first.NewChunkBytes)
+	}
+	if second.ReusableChunkBytes-first.ReusableChunkBytes != uint64(len(body)) {
+		t.Fatalf(
+			"identical request reused %d of %d bytes",
+			second.ReusableChunkBytes-first.ReusableChunkBytes,
+			len(body),
+		)
+	}
+}
+
+func TestConcurrentDedupMeasurementsUseOneSimulatedCache(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer provider.Close()
+
+	providerURL, err := url.Parse(provider.URL)
+	if err != nil {
+		t.Fatalf("parse provider URL: %v", err)
+	}
+	localURL, proxyServer := startLocalProxy(t, providerURL)
+	body := deterministicRequestBody(1024 * 1024)
+	const requestCount = 6
+
+	var requests sync.WaitGroup
+	requests.Add(requestCount)
+	for range requestCount {
+		go func() {
+			defer requests.Done()
+			sendRequestBody(t, localURL, body)
+		}()
+	}
+	requests.Wait()
+
+	snapshot := proxyServer.DedupMeasurementSnapshot()
+	expectedBodyBytes := uint64(requestCount * len(body))
+	if snapshot.MeasuredRequestCount != requestCount {
+		t.Fatalf("unexpected measured request count: %d", snapshot.MeasuredRequestCount)
+	}
+	if snapshot.BodyBytes != expectedBodyBytes {
+		t.Fatalf("unexpected measured body bytes: %d", snapshot.BodyBytes)
+	}
+	if snapshot.NewChunkBytes+snapshot.ReusableChunkBytes != expectedBodyBytes {
+		t.Fatal("concurrent measurements did not account for every request byte")
+	}
+	if snapshot.NewChunkBytes > uint64(len(body)) {
+		t.Fatalf("identical concurrent requests added too many new bytes: %d", snapshot.NewChunkBytes)
+	}
+	if snapshot.SimulatedCacheBytes != snapshot.NewChunkBytes {
+		t.Fatal("simulated cache size differs from unique uploaded bytes")
+	}
+}
+
+func startLocalProxy(t *testing.T, providerURL *url.URL) (string, *localProxy.LocalProxy) {
 	t.Helper()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -197,5 +287,35 @@ func startLocalProxy(t *testing.T, providerURL *url.URL) string {
 		}
 	})
 
-	return "http://" + listener.Addr().String()
+	return "http://" + listener.Addr().String(), proxyServer
+}
+
+func sendRequestBody(t *testing.T, localURL string, body []byte) {
+	t.Helper()
+
+	request, err := http.NewRequest(http.MethodPost, localURL+"/opaque", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("send request: %v", err)
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("unexpected response status: %d", response.StatusCode)
+	}
+}
+
+func deterministicRequestBody(size int) []byte {
+	body := make([]byte, size)
+	state := uint64(0x13198a2e03707344)
+	for index := range body {
+		state ^= state << 13
+		state ^= state >> 7
+		state ^= state << 17
+		body[index] = byte(state >> 56)
+	}
+	return body
 }

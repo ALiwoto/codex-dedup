@@ -14,8 +14,10 @@ neither proxy has a provider-credential configuration field.
 
 ## Current state
 
-The local role is a working protocol-unaware HTTP/SSE pass-through proxy.
-Remote tunneling and deduplication are not implemented yet.
+The local role is a working protocol-unaware HTTP/SSE pass-through proxy. It
+also runs `fastcdc-v1` over request bodies and maintains an in-memory simulated
+remote chunk cache. Remote tunneling and actual bandwidth reduction are not
+implemented yet.
 
 Copy `config.sample.ini` to `config.ini`, configure the provider URL prefix, and
 run the local proxy with:
@@ -38,6 +40,14 @@ This rule applies equally to any other path or ordinary HTTP method. WebSocket
 upgrades are not supported yet.
 
 Use `go run . help` for all command-line options.
+
+For request bodies, the local proxy logs content-free measurements
+including original bytes, chunk count, new chunk bytes, reusable chunk bytes,
+reuse percentage, and simulated cache size. The simulation stores only BLAKE3
+digest-and-length identities. It never stores or logs body bytes, and restarting
+the process clears it. This measurement cache has no eviction yet. Reported new
+chunk bytes deliberately exclude manifest and tunnel overhead because their wire
+format has not been designed yet.
 
 Owner-confirmed architectural invariants are tracked in
 [`docs/core-design.md`](docs/core-design.md).

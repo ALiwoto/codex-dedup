@@ -38,8 +38,9 @@ func Run(options *StartupOptions) error {
 	defer stop()
 
 	proxyServer := localProxy.NewLocalProxy(&localProxy.LocalProxyOptions{
-		BindAddress: appConfig.GetLocalBindAddress(),
-		ProviderURL: appConfig.GetProviderURL(),
+		BindAddress:          appConfig.GetLocalBindAddress(),
+		ProviderURL:          appConfig.GetProviderURL(),
+		LogDedupMeasurements: true,
 	})
 	logging.Infof("local proxy listening on %s", appConfig.GetLocalBindAddress())
 	return proxyServer.Run(ctx)

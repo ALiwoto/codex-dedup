@@ -20,6 +20,8 @@ func NewLocalProxy(options *LocalProxyOptions) *LocalProxy {
 			DisablePathNormalizing:        true,
 			StreamResponseBody:            true,
 		},
+		measurementStore: newDedupMeasurementStore(),
+		logMeasurements:  options.LogDedupMeasurements,
 	}
 	proxyServer.app = fiber.New(fiber.Config{
 		AppName:                      appValues.ApplicationName,
