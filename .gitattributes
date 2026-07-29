@@ -1,0 +1,6 @@
+*.py    eol=lf
+*.go    eol=lf
+*.sh    eol=lf
+*.ini    eol=lf
+*.ps1   eol=crlf
+*.gitignore text eol=lf
