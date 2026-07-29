@@ -9,6 +9,10 @@
 *.dylib
 
 experiment_files/
+config.ini
+data/
+database/
+logs/
 
 # Test binary, built with `go test -c`
 *.test

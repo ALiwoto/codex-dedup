@@ -79,6 +79,18 @@ func CloneSomeType(something *SomeType) *SomeType {...}
 func (s *SomeType) Clone() *SomeType {...}
 ```
 
+If doing something is truly and conceptually not re-usable and it's supposed to happen only and only at a single path ever in the code, then using methods for it is wrong:
+
+```go
+// wrong IF this validate method is only ever called in a single place in a single path in the code.
+// if it's not truly *re-usable*, then adding it as a method would just bloat the struct. Prefer doing
+// the validation in a helper method.
+func (c *MyConfig) Validate() error {
+    // lots of validation here
+}
+
+```
+
 ## Mutexes
 
 ### Unlock safety
@@ -498,4 +510,118 @@ There is no protocol-versioning support in CCL (and we recommend you to not have
 For internal-services that need to have a perfectly matching protocol, we recommend keeping `#[StrictBinaryParsing(true)]`; missing fields will result in error.
 
 For backward-compatibility (e.g. cache storage), you can set `#[StrictBinaryParsing(false)]` and only add new fields to your model, this way the deserialization algorithm will act greedy and return back as much as it can read; but it must stay append-only, you can just mark the old fields as deprecated (and remove them gradually in future releases).
+
+## Evidence-based guards and sanitization
+
+Before adding a nil-check, fallback, sanitization, or other defensive branch, inspect every current construction site and caller. Add the branch only when the state can actually occur in the real world or when the value enters through an untrusted boundary where that state is valid input. Do not write branches for hypothetical future misuse.
+
+```go
+// bad: config is allocated immediately before this method call, and Validate
+// has no other callers. The nil state cannot occur.
+func (c *PlatformConfig) Validate() error {
+	if c == nil {
+		return errors.New("config is nil")
+	}
+	// ...
+}
+
+config := &PlatformConfig{}
+if err := parseConfig(config); err != nil {
+	return err
+}
+return config.Validate()
+
+// good: rely on the constructor/call path that is already enforced.
+func (c *PlatformConfig) Validate() error {
+	// validate states that parsed user configuration can actually contain
+}
+```
+
+The same rule applies to string sanitization. Confirm what the parser, constructor, or previous boundary already guarantees before adding `strings.TrimSpace`, case conversion, or similar transformations. `ssg.ParseConfig` already trims values read from INI files, so trimming every parsed config field again is duplication. Environment values are not trimmed by `ssg`; validate them exactly unless the application explicitly decides that environment input should be normalized.
+
+```go
+// bad: repeated speculative sanitization after the parser already did it.
+config.LogDirectory = strings.TrimSpace(config.LogDirectory)
+config.BindAddress = strings.TrimSpace(config.BindAddress)
+config.ProviderURL = strings.TrimSpace(config.ProviderURL)
+
+// good: validate the parsed values according to the operation that consumes them.
+if config.LogDirectory == "" {
+	return errors.New("log directory is required")
+}
+if _, _, err := net.SplitHostPort(config.BindAddress); err != nil {
+	return fmt.Errorf("invalid bind address: %w", err)
+}
+```
+
+If normalization is genuinely required, perform it once at the input boundary. For important concepts, prefer a named type and constructor so normalized values can be tracked instead of repeating sanitization throughout the codebase.
+
+## Contextual type names
+
+Type names must identify their domain clearly enough that a reader can understand most of their purpose without finding the declaration. Avoid vague names such as `Role`, `Options`, `Data`, or `Config` when the package can contain multiple kinds of those concepts.
+
+```go
+// bad: these names lose their meaning as soon as the package grows or the type
+// is referenced without surrounding context.
+type Role string
+type Options struct {
+	Verbose bool
+}
+
+// good: the names state which role and which operation they belong to.
+type ProxyRole string
+type ConfigCheckOptions struct {
+	ProxyRole ProxyRole
+	Verbose   bool
+}
+type LoggerOptions struct {
+	Debug bool
+}
+```
+
+Do not make names extremely long merely to encode every field. Include enough domain and operation context to prevent plausible confusion, such as mistaking a proxy role for a user authorization role.
+
+## Option structs
+
+Prefer passing option structs by pointer. Options commonly grow over time, should not be copied unnecessarily, and are naturally constructed for one operation. Name the type after that operation or subsystem rather than calling it only `Options`.
+
+```go
+// bad: vague type name and value copy.
+type Options struct {
+	ConfigFile string
+}
+
+func Check(options Options) error {
+	// ...
+}
+
+// good: contextual name and pointer parameter.
+type ConfigCheckOptions struct {
+	ConfigFile string
+}
+
+func CheckConfig(options *ConfigCheckOptions) error {
+	// ...
+}
+```
+
+Do not automatically add `if options == nil` to a pointer-based options function. First inspect its callers. If all callers construct a non-nil options value and nil has no valid meaning, a nil guard is another unreachable defensive branch.
+
+
+Sometimes, some callers are supposed to accept nil-options (basically when we want to say `"I do not want to override any options"` or when we want to do an operation "purely normal without any extra actions"). in which case, nil-options are allowed.
+Example:
+
+```go
+type SomethingOptions struct {
+    DoAnotherThing bool
+}
+func DoSomething(opts *SomethingOptions) error {
+    if opts == nil {
+        // opts is nil, so we will just choose the fast-path here
+    }
+
+    // we will do more advanced stuff here
+}
+```
+
 
