@@ -14,16 +14,28 @@ neither proxy has a provider-credential configuration field.
 
 ## Current state
 
-The project currently provides the shared command-line, configuration, logging,
-and startup foundation. Proxying and deduplication are not implemented yet.
+The local role is a working protocol-unaware HTTP/SSE pass-through proxy.
+Remote tunneling and deduplication are not implemented yet.
 
-Copy `config.sample.ini` to `config.ini`, fill the local or remote settings, and
-validate them with:
+Copy `config.sample.ini` to `config.ini`, configure the provider URL prefix, and
+run the local proxy with:
 
 ```powershell
-go run . local --check
-go run . remote --check
+go run . local
 ```
+
+The incoming method, request path, query, end-to-end headers, and body are
+forwarded without provider-specific parsing. `provider_url` acts only as a
+prefix:
+
+```text
+provider_url: https://provider.example/prefix
+incoming:     /anything/here?stream=true
+target:       https://provider.example/prefix/anything/here?stream=true
+```
+
+This rule applies equally to any other path or ordinary HTTP method. WebSocket
+upgrades are not supported yet.
 
 Use `go run . help` for all command-line options.
 

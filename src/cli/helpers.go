@@ -25,7 +25,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stdout, "%s %s\n", appValues.ApplicationName, appValues.Version)
 		return exitSuccess
 	case string(appValues.ProxyRoleLocal), string(appValues.ProxyRoleRemote):
-		return runProxyRole(appValues.ProxyRole(command), args[1:], stdout, stderr)
+		return runProxyRole(appValues.ProxyRole(command), args[1:], stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "unknown command %q\n\n", args[0])
 		printUsage(stderr)
@@ -33,7 +33,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-func runProxyRole(proxyRole appValues.ProxyRole, args []string, stdout, stderr io.Writer) int {
+func runProxyRole(proxyRole appValues.ProxyRole, args []string, stderr io.Writer) int {
 	flags := flag.NewFlagSet(string(proxyRole), flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configFile := flags.String("config", defaultConfigFile, "path to the INI configuration file")
@@ -53,12 +53,7 @@ func runProxyRole(proxyRole appValues.ProxyRole, args []string, stdout, stderr i
 		_, _ = fmt.Fprintf(stderr, "unexpected argument %q\n", flags.Arg(0))
 		return exitUsage
 	}
-	// if !*check {
-	// 	_, _ = fmt.Fprintf(stderr, "%s proxy runtime is not implemented yet; use --check to validate its configuration\n", proxyRole)
-	// 	return exitFailure
-	// }
-
-	if err := appStartup.CheckConfig(&appStartup.ConfigCheckOptions{
+	if err := appStartup.Run(&appStartup.StartupOptions{
 		ProxyRole:  proxyRole,
 		ConfigFile: *configFile,
 		Verbose:    *verbose,
@@ -67,7 +62,6 @@ func runProxyRole(proxyRole appValues.ProxyRole, args []string, stdout, stderr i
 		return exitFailure
 	}
 
-	_, _ = fmt.Fprintf(stdout, "%s configuration is valid\n", proxyRole)
 	return exitSuccess
 }
 
@@ -75,12 +69,12 @@ func printUsage(output io.Writer) {
 	_, _ = fmt.Fprintf(output, `Usage: %s <command> [options]
 
 Commands:
-  local       configure the local proxy role
-  remote      configure the remote proxy role
+  local       run the local pass-through proxy
+  remote      run the remote proxy (not implemented yet)
   version     print the application version
   help        print this help
 
-The proxy runtimes are not implemented yet. Use local or remote with --check
-to validate that role's configuration.
+The local proxy forwards ordinary HTTP requests and streamed responses to the
+configured provider URL prefix. Deduplication is not implemented yet.
 `, appValues.ApplicationName)
 }

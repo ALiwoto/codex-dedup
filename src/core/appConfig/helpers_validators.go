@@ -21,31 +21,40 @@ func validateBindAddress(value, fieldName string) error {
 	return nil
 }
 
-func validateHTTPURL(value, fieldName string) error {
+func parseHTTPURL(value, fieldName string) (*url.URL, error) {
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return fmt.Errorf("%s must be an absolute HTTP or HTTPS URL", fieldName)
+		return nil, fmt.Errorf("%s must be an absolute HTTP or HTTPS URL", fieldName)
 	}
 	if parsed.User != nil {
-		return fmt.Errorf("%s must not contain credentials", fieldName)
+		return nil, fmt.Errorf("%s must not contain credentials", fieldName)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("%s must not contain a query or fragment", fieldName)
 	}
 
-	return nil
+	return parsed, nil
 }
-func validateProxyConfig(config *PlatformConfig, proxyRole appValues.ProxyRole) error {
+
+func validateHTTPURL(value, fieldName string) error {
+	_, err := parseHTTPURL(value, fieldName)
+	return err
+}
+
+func validateProxyConfig(config *PlatformConfig, proxyRole appValues.ProxyRole) (*url.URL, error) {
 	if config.LogDirectory == "" {
-		return fmt.Errorf("main.log_directory is required")
+		return nil, fmt.Errorf("main.log_directory is required")
 	}
 
 	if proxyRole == appValues.ProxyRoleLocal {
 		if err := validateBindAddress(config.LocalBindAddress, "local.bind_address"); err != nil {
-			return err
+			return nil, err
 		}
 		if err := validateHTTPURL(config.RemoteURL, "local.remote_url"); err != nil {
-			return err
+			return nil, err
 		}
-		return validateHTTPURL(config.ProviderURL, "local.provider_url")
+		return parseHTTPURL(config.ProviderURL, "local.provider_url")
 	}
 
-	return validateBindAddress(config.RemoteBindAddress, "remote.bind_address")
+	return nil, validateBindAddress(config.RemoteBindAddress, "remote.bind_address")
 }

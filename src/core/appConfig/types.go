@@ -1,5 +1,7 @@
 package appConfig
 
+import "net/url"
+
 type PlatformConfig struct {
 	Debug        bool   `section:"main" key:"debug" default:"false"`
 	LogDirectory string `section:"main" key:"log_directory" default:"logs"`
@@ -9,4 +11,6 @@ type PlatformConfig struct {
 	ProviderURL      string `section:"local" key:"provider_url"`
 
 	RemoteBindAddress string `section:"remote" key:"bind_address" default:":1919"`
+
+	providerURL *url.URL
 }

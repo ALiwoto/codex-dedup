@@ -23,6 +23,11 @@ codex-cli <-> local proxy <-> remote proxy <-> provider
 4. Neither proxy has provider credentials in its configuration. Credentials
    supplied by the client are transported as opaque request metadata and must
    never be logged or placed in the chunk store.
+5. Provider HTTP paths and methods are opaque. `provider_url` is a generic URL
+   prefix; the incoming raw path and query are appended without interpreting
+   versions, endpoint names, or schemas.
+6. The current transport scope is ordinary HTTP with streamed SSE responses.
+   WebSocket upgrades may be added separately later.
 
 ## Not decided yet
 

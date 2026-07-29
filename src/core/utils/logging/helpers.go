@@ -82,3 +82,7 @@ func Infof(template string, args ...any) {
 func Debugf(template string, args ...any) {
 	appLogger.Debugf(template, args...)
 }
+
+func Error(args ...any) {
+	appLogger.Error(args...)
+}
